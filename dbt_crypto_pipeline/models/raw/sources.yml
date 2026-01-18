@@ -1,0 +1,8 @@
+version: 2
+
+sources:
+  - name: crypto_raw
+    database: CRYPTO_DB
+    schema: RAW
+    tables:
+      - name: BINANCE_RAW

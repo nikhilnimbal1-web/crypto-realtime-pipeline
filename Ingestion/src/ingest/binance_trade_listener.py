@@ -3,14 +3,12 @@ import time
 import requests
 import websocket
 import boto3
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
 # ================= CONFIG =================
 SYMBOL = "BTCUSDT"
-
-# For testing use 60, for real use 15 * 60
-BATCH_INTERVAL_SECONDS = 60
+BATCH_INTERVAL_SECONDS = 60  # 15*60 in production
 
 S3_BUCKET = "crypto-realtime-nikhil-001"
 S3_PREFIX = "binance/raw/"
@@ -28,17 +26,12 @@ batch_start_time = time.time()
 
 # ============ STATE MANAGEMENT ============
 def read_last_time():
-    """
-    Read last successful ingestion time from disk.
-    Always return UTC-aware datetime.
-    """
     if not STATE_FILE.exists():
         return None
 
     data = json.loads(STATE_FILE.read_text())
     ts = datetime.fromisoformat(data["last_successful_time"])
 
-    # 🔥 FIX: normalize to UTC if naive
     if ts.tzinfo is None:
         ts = ts.replace(tzinfo=timezone.utc)
 
@@ -46,24 +39,14 @@ def read_last_time():
 
 
 def write_last_time(ts: datetime):
-    """
-    Persist last successful ingestion time to disk (UTC).
-    """
     STATE_FILE.write_text(
         json.dumps({"last_successful_time": ts.isoformat()})
     )
 
 # ============ S3 UPLOAD ============
 def upload_to_s3(records, prefix="stream", start_time=None, end_time=None):
-    """
-    Upload records to S3.
-
-    Streaming:
-      stream_YYYY-MM-DD_HH-MM-SS.json
-
-    Backfill:
-      backfill_YYYY-MM-DD_HH-MM_to_YYYY-MM-DD_HH-MM.json
-    """
+    if not records:
+        return
 
     if prefix == "backfill" and start_time and end_time:
         start_str = start_time.strftime("%Y-%m-%d_%H-%M")
@@ -85,9 +68,6 @@ def upload_to_s3(records, prefix="stream", start_time=None, end_time=None):
 
 # ============ BACKFILL ============
 def backfill(start_time: datetime, end_time: datetime):
-    """
-    Fetch missing data using Binance REST API.
-    """
     print(f"Backfilling {start_time} → {end_time}")
 
     params = {
@@ -100,8 +80,20 @@ def backfill(start_time: datetime, end_time: datetime):
     all_trades = []
 
     while True:
-        response = requests.get(BINANCE_REST_URL, params=params)
-        response.raise_for_status()
+        try:
+            response = requests.get(
+                BINANCE_REST_URL,
+                params=params,
+                timeout=10
+            )
+            response.raise_for_status()
+
+        except requests.exceptions.RequestException as e:
+            print("Backfill failed due to network/API issue:")
+            print(e)
+            print("Skipping backfill. Streaming will continue.")
+            return
+
         trades = response.json()
 
         if not trades:
@@ -135,20 +127,22 @@ def on_message(ws, message):
 
     data = json.loads(message)
 
+    trade_time = datetime.fromtimestamp(
+        data["T"] / 1000, tz=timezone.utc
+    )
+
     trade = {
         "symbol": data["s"],
         "price": float(data["p"]),
         "quantity": float(data["q"]),
-        "trade_time": datetime.fromtimestamp(
-            data["T"] / 1000, tz=timezone.utc
-        ).isoformat()
+        "trade_time": trade_time.isoformat()
     }
 
     buffer.append(trade)
 
     if time.time() - batch_start_time >= BATCH_INTERVAL_SECONDS:
         upload_to_s3(buffer)
-        write_last_time(datetime.now(timezone.utc))
+        write_last_time(trade_time)  # ✅ correct checkpoint
         buffer.clear()
         batch_start_time = time.time()
 
@@ -157,14 +151,16 @@ def main():
     now = datetime.now(timezone.utc)
     last_time = read_last_time()
 
-    # 🔥 Correct backfill condition
     if last_time:
         gap_seconds = (now - last_time).total_seconds()
         if gap_seconds > BATCH_INTERVAL_SECONDS:
             backfill(last_time, now)
 
     print("Starting live streaming...")
-    ws = websocket.WebSocketApp(WS_URL, on_message=on_message)
+    ws = websocket.WebSocketApp(
+        WS_URL,
+        on_message=on_message
+    )
     ws.run_forever()
 
 if __name__ == "__main__":

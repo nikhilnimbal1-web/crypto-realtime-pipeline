@@ -1,0 +1,15 @@
+version: 2
+
+models:
+  - name: trades_deduped
+    description: >
+      Silver layer model containing cleaned, deduplicated Binance trades
+      with Indian time conversion and business-readable trade key.
+
+    columns:
+      - name: trade_business_key
+        description: >
+          Business-readable trade identifier built from Indian trade time,
+          normalized price, and normalized quantity.
+        tests:
+          - not_null
