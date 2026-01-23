@@ -1,209 +1,144 @@
 🚀 Crypto Near Real-Time Data Engineering Pipeline
-📌 Overview
+Overview
+This project implements a near real-time data ingestion pipeline using live cryptocurrency trade data from Binance, featuring a TradingView-style interactive dashboard built with Streamlit + Plotly. It simulates real-world data engineering challenges like system downtime, recovery, backfilling, and production-ready visualization.
 
-This project implements a near real-time data engineering pipeline that ingests live cryptocurrency trade data from Binance, handles system downtime, and automatically backfills missing data to ensure data completeness and reliability.
+✨ New Features Added
+text
+✅ FULLY INTERACTIVE TRADINGVIEW DASHBOARD
+✅ Real-time candlestick charts (15m, 5m, 1m, 1d)
+✅ Customizable candle colors (Fill + Border/Wick separately)
+✅ Dark/Light theme toggle
+✅ Zoom/Pan TradingView controls
+✅ Clean axes (Time + Price labels only)
+✅ Snowflake-powered OHLC data
+✅ Production-grade UI
+Problem Statement
+Real-time data systems face:
 
-The project is designed to simulate real-world data engineering challenges commonly faced in production systems using free, cloud-friendly, and scalable tools.
+Continuous data arrival
 
-⚡ This is not just streaming ingestion — it demonstrates fault tolerance, recovery, and production-grade design decisions.
+System crashes or restarts
 
-🎯 Problem Statement
+Risk of missing or incomplete data
 
-In real-world data platforms:
+Visualization at scale
 
-Data arrives continuously
+This project addresses:
 
-Systems can crash, restart, or lose connectivity
+Near real-time streaming ingestion
 
-Missing data can lead to incorrect analytics
+Automatic recovery of missed data
 
-Pipelines must self-heal without manual intervention
+Reliable cloud storage for analytics
 
-This project solves:
+Interactive TradingView dashboard
 
-✅ Near real-time ingestion of streaming data
-
-✅ Safe recovery of missed data after downtime
-
-✅ Reliable cloud storage for downstream analytics
-
-✅ Clear separation of ingestion and transformation layers
-
-🏗️ Architecture Overview
+🏗️ Complete Architecture
+text
 Binance WebSocket (Live Trades)
         |
         v
 Python Ingestion Service
         |
-        |-- Micro-batch every N seconds
-        |        |
-        |        v
-        |    Amazon S3 (Streaming Files)
+        |-- Micro-batch every N seconds --> Amazon S3 (stream files)
         |
-        |-- On Restart / Downtime Detected
-                 |
-                 v
-        Binance REST API (Backfill)
-                 |
-                 v
-            Amazon S3 (Backfill Files)
-
-✨ Key Features
-
-Near real-time ingestion using Binance WebSocket
-
-Micro-batch uploads to Amazon S3
-
-Automatic backfill using Binance REST API after downtime
-
-Checkpointing using a persisted state file
-
-Clear file naming with time-window metadata
-
-Idempotent & fault-tolerant design
-
-Free-tier friendly cloud architecture
-
-Production-style project structure
-
-🧱 Project Structure
+        |-- On restart --> Binance REST API (Backfill) --> Amazon S3
+        |
+        v
+Snowflake (dbt_crypto_pipeline/)
+        |
+        v
+🕯️ TradingView Dashboard (Streamlit + Plotly)
+Project Structure
+text
 crypto_realtime_pipeline/
-│
-├── Ingestion/                     # Data ingestion layer
-│   ├── src/
-│   │   └── ingest/
-│   │       └── binance_trade_listener.py
+├── Ingestion/
+│   ├── src/ingest/binance_trade_listener.py
 │   ├── requirements.txt
-│   ├── state.json                 # Checkpoint for recovery
-│   └── README.md
-│
-├── dbt_crypto_pipeline/           # Transformation layer (Silver / Gold)
+│   └── state.json
+├── dbt_crypto_pipeline/
 │   ├── models/
+│   │   ├── TRADES_OHLC_1M.sql
+│   │   ├── TRADES_OHLC_5M.sql
+│   │   ├── TRADES_OHLC_15M.sql
+│   │   └── TRADES_OHLC_1D.sql
 │   ├── tests/
+│   ├── dashboard.py          ← ✨ NEW!
 │   └── dbt_project.yml
-│
 ├── .gitignore
 └── README.md
+🎛️ Dashboard Features
+Feature	Status
+Candlestick Charts	✅ 15m/5m/1m/1d
+Color Customization	✅ Fill + Border/Wick
+Theme Toggle	✅ Dark/Light
+TradingView Controls	✅ Zoom/Pan/Reset
+Snowflake Integration	✅ Live data
+Clean UI	✅ No clutter
+How the Pipeline Works
+text
+1. Python service → Binance WebSocket (live trades)
+2. Micro-batch → S3 (every 60s)
+3. dbt → Snowflake (OHLC aggregation)
+4. Streamlit → Interactive candlesticks
+5. Restart → Auto-backfill gaps
+🔧 Key Technologies
+text
+DATA INGESTION
+├── Python + WebSocket + REST API
+├── Amazon S3 (free-tier)
+├── boto3 + checkpointing
+└── Fault-tolerant backfill
 
+DATA WAREHOUSE
+├── Snowflake (COMPUTE_WH)
+├── dbt (multi-timeframe models)
+└── OHLC aggregation
 
-🔑 Design decision:
-Ingestion and transformation are intentionally decoupled to allow:
+VISUALIZATION
+├── Streamlit (dashboard.py)
+├── Plotly (candlesticks)
+├── Custom colors/themes
+└── TradingView UX
+🚀 Production Features Delivered
+text
+✅ Near real-time ingestion
+✅ Automatic backfill/recovery
+✅ Multi-timeframe OHLC (1m/5m/15m/1d)
+✅ Interactive TradingView dashboard
+✅ Custom candle styling (4 colors)
+✅ Theme switching
+✅ Fault tolerance
+✅ Cloud-native (S3 + Snowflake)
+✅ Clean, recruiter-ready UI
+💡 What I Learned
+Near real-time pipeline design with checkpointing
 
-independent scaling
+Plotly candlestick customization (fill/border/wick)
 
-easier debugging
+Snowflake + dbt for multi-timeframe analytics
 
-production-style deployment
+Streamlit production dashboards
 
-🧠 How the Pipeline Works (Step-by-Step)
-1️⃣ Live Streaming
+TradingView UX implementation
 
-Python service connects to Binance WebSocket
+Fault-tolerant data systems
 
-Receives live trade events in near real-time
-
-2️⃣ In-Memory Buffering
-
-Incoming events are buffered temporarily
-
-Prevents excessive small writes to S3
-
-3️⃣ Micro-Batch Upload
-
-Every configured interval (e.g. 60 seconds):
-
-Buffered data is written to Amazon S3
-
-File includes timestamp-based naming
-
-4️⃣ Checkpointing
-
-Last successful ingestion timestamp is stored locally
-
-Enables precise recovery after crashes
-
-5️⃣ Automatic Backfill (Critical Feature)
-
-On service restart:
-
-Time gap is detected
-
-Missing data is fetched via Binance REST API
-
-Backfilled data is uploaded to S3
-
-Live streaming then resumes automatically
-
-🛡️ Failure Handling & Recovery
-Failure Scenario	How It’s Handled
-Process crash	Checkpoint ensures no data loss
-Network failure	Retry logic + backfill
-Application restart	Automatic gap detection
-Partial uploads	S3 object-level durability
-
-✅ Guarantee: No silent data loss, even during downtime.
-
-🧪 How to Run the Project
-# Activate virtual environment
-venv\Scripts\activate
-
-# Start ingestion service
-python src\ingest\binance_trade_listener.py
-
-🧰 Tech Stack
-
-Python
-
-Binance WebSocket & REST API
-
-Amazon S3
-
-boto3
-
-websocket-client
-
-dbt (for transformations)
-
-📈 What I Learned
-
-Designing near real-time ingestion pipelines
-
-Handling system crashes using backfill logic
-
-Working with WebSocket + REST hybrid architectures
-
-Cloud storage best practices with Amazon S3
-
-Importance of fault tolerance & idempotency
-
-Structuring projects like real production data platforms
-
-🚀 Future Improvements
-
-🔄 Introduce Kafka for durable buffering
-
-❄ Load data from S3 into Snowflake
-
-🧹 Add deduplication logic
-
-⏱ Orchestration using Airflow
-
-📊 Add data quality checks in dbt
-
-🪵 Centralized logging & monitoring
-
-🏆 Why This Project Matters
-
-This project demonstrates:
-
-Real-world data engineering problem solving
-
-Production-aware design decisions
-
-Cloud-native & scalable architecture
-
-Strong understanding of failure handling
-
-Clear separation of concerns (Ingestion vs Transformation)
-
-📌 This is how real data platforms are built — not toy pipelines.
+🔮 Future Improvements
+text
+Phase 2: Apache Kafka (durable queue)
+Phase 3: Airflow orchestration
+Phase 4: Real-time alerts
+Phase 5: Multi-asset support
+Phase 6: Mobile responsive
+🎯 Why This Project Stands Out
+text
+✅ End-to-end pipeline (Ingest → Warehouse → Viz)
+✅ Production-grade fault tolerance
+✅ TradingView-level visualization
+✅ Cloud-native (free-tier friendly)
+✅ Interview-ready demo
+✅ Recruiter-friendly README
+Live Demo: (http://localhost:8501)
+Tech Stack: Python | Snowflake | dbt | S3 | Streamlit | Plotly
+Status: 🚀 Production Ready
