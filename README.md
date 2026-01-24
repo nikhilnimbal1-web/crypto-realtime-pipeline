@@ -52,7 +52,7 @@ pip install requests websocket-client boto3
 python ingest.py
 ```
 
-2. SNOWFLAKE SETUP (snowflake_setup.sql)
+## 2. SNOWFLAKE SETUP (snowflake_setup.sql)
 Creates:
 ```
 DATABASE: CRYPTO_DB
@@ -66,62 +66,63 @@ DATABASE: CRYPTO_DB
 
 Snowpipe auto-loads S3 files → RAW table (10-30s latency)
 
-3. DBT MEDALLION PIPELINE
+## 3. DBT MEDALLION PIPELINE
 Raw → Silver:
+```
 JSON parsing → IST timezone → business_key → deduplication
 RAW.BINANCE_RAW → SILVER.TRADES_DEDUPED
+```
 
 Silver → Gold:
+```
 Window functions → OHLC aggregation
 TRADES_DEDUPED → TRADES_OHLC_1M/5M/15M/1D
+```
 
-4. TRADINGVIEW DASHBOARD (dashboard.py)
-Features:
+## 4. TRADINGVIEW DASHBOARD (dashboard.py)
+### Features:
+1. 4x color pickers (bull/bear fill + border/wick)
+2. Multi-timeframe (1m / 5m / 15m / 1d)
+3. Dark / light themes
+4. Live Snowflake queries (5s refresh)
+5. Zoom + pan interactions
 
-4x color pickers (bull/bear fill + border/wick)
-
-Multi-timeframe (1m/5m/15m/1d)
-
-Dark/light themes
-
-Live Snowflake queries (5s refresh)
-
-Zoom + pan interactions
 
 Run:
+```
 pip install streamlit plotly snowflake-connector-python pandas
 streamlit run dashboard.py
+```
 
-📁 File Structure
+## 📁 File Structure
+```
 crypto_realtime_pipeline/
 ├── ingest.py              # Binance → S3
 ├── snowflake_setup.sql    # Snowpipe infra  
 ├── dashboard.py           # TradingView UI
 ├── requirements.txt
 └── README.md
+```
 
-🚀 Production Features
-✅ Fault tolerance (state.json recovery)
+## 🚀 Production Features
+1. Fault tolerance (state.json recovery)
+2. Rate limiting (API throttling)
+3. Auto-scaling (Snowpipe + dbt)
+4. Deduplication (business keys)
+5. Timezone handling (UTC → IST)
 
-✅ Rate limiting (API throttling)
+## 📊 Performance
+1. Stage	Latency	Throughput
+2. Python→S3	60s batches	1000+ trades/min
+3. Snowpipe	10-30s	Auto
+4. dbt	2-5min	Incremental
+5. Dashboard	5s refresh	Interactive
+   
+## 👨‍💻 Author
+### Nikhil Nimbal
+### Data Engineer | Snowflake + dbt Expert
+### 📍 bangalore, Karnataka, India
+### 💼 LinkedIn:https://www.linkedin.com/in/nikhilnimbal/
 
-✅ Auto-scaling (Snowpipe + dbt)
-
-✅ Deduplication (business keys)
-
-✅ Timezone handling (UTC → IST)
-
-📊 Performance
-Stage	Latency	Throughput
-Python→S3	60s batches	1000+ trades/min
-Snowpipe	10-30s	Auto
-dbt	2-5min	Incremental
-Dashboard	5s refresh	Interactive
-👨‍💻 Author
-Nikhil Nimbalkar
-Data Engineer | Snowflake + dbt Expert
-📍 Nagenahalli, Karnataka, India
-💼 LinkedIn
-
-Status: 🚀 PRODUCTION LIVE | ⭐ Star this repo!
+### Status: 🚀 PRODUCTION LIVE | ⭐ Star this repo!
 
