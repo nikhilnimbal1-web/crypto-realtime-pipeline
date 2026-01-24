@@ -19,14 +19,15 @@
 ---
 
 ## 🏗️ Architecture Flow
-Binance WS/REST → Python Ingester → S3 Raw JSON
-↓
-Snowflake Snowpipe (10-30s)
-↓
-RAW → dbt SILVER → dbt GOLD
-↓
-Streamlit TradingView Dashboard
-
+  ```bash
+  Binance WS/REST → Python Ingester → S3 Raw JSON
+  ↓
+  Snowflake Snowpipe (10-30s)
+  ↓
+  RAW → dbt SILVER → dbt GOLD
+  ↓
+  Streamlit TradingView Dashboard
+  ```
 
 ---
 
@@ -39,17 +40,21 @@ Streamlit TradingView Dashboard
 - Fault-tolerant state.json checkpointing
 
 **Output files:**
+```
 s3://crypto-realtime-nikhil-001/binance/raw/
 ├── stream_2026-01-24_13-22-00.json (live batches)
 └── backfill_13-00_to_13-30.json (gap recovery)
+```
 
 **Run:**
 ```bash
 pip install requests websocket-client boto3
 python ingest.py
+```
 
 2. SNOWFLAKE SETUP (snowflake_setup.sql)
 Creates:
+```
 DATABASE: CRYPTO_DB
 ├── RAW/
 │   ├── BINANCE_RAW (Snowpipe target)
@@ -57,6 +62,7 @@ DATABASE: CRYPTO_DB
 │   └── BINANCE_PIPE (AUTO_INGEST)
 ├── SILVER/ (dbt)
 └── GOLD/ (OHLC analytics)
+```
 
 Snowpipe auto-loads S3 files → RAW table (10-30s latency)
 
