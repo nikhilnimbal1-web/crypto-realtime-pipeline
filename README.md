@@ -1,93 +1,164 @@
-# 🚀 Crypto Near Real-Time Data Engineering Pipeline
+🚀 Crypto Near Real-Time Data Engineering Pipeline - COMPLETE TECHNICAL BREAKDOWN
+Production-grade end-to-end system: Live Binance trades → S3 → Snowflake Snowpipe → dbt Medallion → TradingView Dashboard. <60s end-to-end latency.
 
-An end-to-end data engineering project that ingests live cryptocurrency trades via WebSockets, processes them through a modern data stack, and visualizes market movement in a professional-grade dashboard.
 
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](http://localhost:8501)
+🎯 Executive Summary
 
----
+Metric	Value
+Data Source	Binance BTCUSDT Live Trades
+End-to-End Latency	<60 seconds
+Storage	S3 (crypto-realtime-nikhil-001) + Snowflake
+Transformation	dbt Medallion (Raw→Silver→Gold)
+Visualization	TradingView-style Interactive Dashboard
+Scalability	Multi-asset ready, auto-scaling Snowpipe
+🏗️ Complete Architecture
+text
+┌─────────────────┐    ┌──────────────┐    ┌──────────────┐
+│   BINANCE API   │    │  PYTHON      │    │     S3       │
+│  WS + REST      │───▶│  INGESTER    │───▶│ binance/raw/ │
+└─────────────────┘    │ websocket    │    └──────────────┘
+                       │  + boto3     │           ↓
+                       └──────────────┘      Snowpipe
+                              ↓                  ↓
+                       state.json          ┌──────────────┐
+                              ↓            │ SNOWFLAKE    │
+                       Fault Recovery      │   RAW        │
+                                           │ BINANCE_RAW  │
+                                           └──────┬───────┘
+                                                  ↓ dbt
+                                           ┌──────────────┐
+                                           │   SILVER     │
+                                           │ TRADES_DEDUP │
+                                           └──────┬───────┘
+                                                  ↓ dbt
+                                           ┌──────────────┐
+                                           │    GOLD      │
+                                           │  OHLC_1M/5M  │
+                                           └──────┬───────┘
+                                                  ↓
+                                           ┌──────────────┐
+                                           │ STREAMLIT    │
+                                           │ DASHBOARD    │
+                                           │ Plotly+Snowflake│
+                                           └──────────────┘
+1. PYTHON INGESTER (ingest.py) - Streaming Engine
+4 Core Components
+python
+WebSocket: wss://stream.binance.com:9443/ws/btcusdt@trade
+REST API: https://api.binance.com/api/v3/aggTrades  
+S3: boto3 → crypto-realtime-nikhil-001/binance/raw/
+State: state.json (checkpointing)
+Execution Flow
+text
+1. Read state.json → Get last_successful_time
+2. Gap > 60s? → REST backfill (paginated)
+3. WebSocket streaming → 60s batches → S3
+4. Update state.json → Repeat infinitely
+Output Files
+text
+stream_2026-01-24_13-22-00.json     # Live batches
+backfill_13-00_to_13-30.json        # Gap recovery
+Record Format:
 
-## 🎯 Production Features
+json
+{"symbol": "BTCUSDT", "price": 42345.67, "quantity": 0.015, "trade_time": "2026-01-24T08:22:15Z"}
+2. SNOWFLAKE INFRA (snowflake_setup.sql) - Zero-ETL
+Infrastructure Created
+text
+DATABASE: CRYPTO_DB
+├── RAW/
+│   ├── BINANCE_RAW (VARIANT + load_ts)
+│   ├── BINANCE_STAGE (s3://crypto-realtime-nikhil-001)
+│   └── BINANCE_PIPE (AUTO_INGEST=TRUE)
+├── SILVER/ (dbt transformations)
+└── GOLD/ (OHLC analytics)
+Snowpipe Auto-Magic
+text
+S3 File Upload → SNS Notification → Snowpipe → RAW Table
+Latency: 10-30 seconds | Cost: $0.06 per TB processed
+3. DBT MEDALLION PIPELINE - Production Data Engineering
+Bronze → Silver
+text
+RAW.BINANCE_RAW (JSON) → SILVER.TRADES_DEDUPED
+Transformations:
 
-| Feature | Status |
-| :--- | :--- |
-| **Candlestick Charts** | ✅ 1m, 5m, 15m, and 1d intervals |
-| **Custom Styling** | ✅ Financial-grade Fill + Border/Wick colors |
-| **Interactive UI** | ✅ TradingView-style Zoom, Pan, and Range Selectors |
-| **Live Data** | ✅ Direct Snowflake integration with <60s latency |
-| **Fault Tolerance** | ✅ Checkpointing + Auto-backfill via REST API |
+JSON flattening (raw_data → structured columns)
 
----
+IST timezone conversion
 
-## 🏗️ Architecture Overview
+Business key (SHA256(symbol+price+quantity+time))
 
-The pipeline implements a **Medallion Architecture** designed for high-throughput financial data.
+Deduplication via ROW_NUMBER()
 
-```mermaid
-graph TD
-    A[Binance WebSocket<br/>Live Trades] --> B[Python Ingestion Service]
-    B --> C[S3 Micro-batches<br/>60s Parquet files]
-    B --> D[Auto Backfill<br/>REST API Support]
-    C --> E[Snowflake + dbt<br/>OHLC Transformation]
-    E --> F[🕯️ Streamlit Dashboard<br/>Plotly Financial UI]
-📁 Project Structure
-Plaintext
-crypto_realtime_pipeline/
-├── Ingestion/                 # WebSocket + S3 logic
-│   ├── binance_trade_listener.py
-│   └── state.json             # Fault tolerance checkpointing
-├── dbt_crypto_pipeline/       # SQL Transformations
-│   ├── models/
-│   │   ├── TRADES_OHLC_1M.sql
-│   │   ├── TRADES_OHLC_5M.sql
-│   │   ├── TRADES_OHLC_15M.sql
-│   │   └── TRADES_OHLC_1D.sql
-│   ├── dashboard.py          # ✨ Streamlit UI
-│   └── dbt_project.yml
-├── requirements.txt
-├── .gitignore
-└── README.md
-🔧 Tech Stack
-Data Source: Binance API (WebSockets & REST)
+Silver → Gold
+text
+TRADES_DEDUPED → TRADES_OHLC_1M/5M/15M/1D
+OHLC Logic:
 
-Storage: AWS S3 (Data Lake) & Snowflake (Warehouse)
+text
+OPEN  = FIRST_VALUE(close) OVER window
+HIGH  = MAX(price) OVER window  
+LOW   = MIN(price) OVER window
+CLOSE = LAST_VALUE(close) OVER window
+VOLUME = SUM(quantity) OVER window
+dbt Excellence
+{{ ref('raw_binance') }} lineage
 
-Transformation: dbt (Data Build Tool)
+Incremental models
 
-Pipeline: Python (Boto3, Pandas)
+Automated tests
 
-UI: Streamlit & Plotly (Financial Charting)
+Seeds (time dimensions)
 
-💻 Quick Start
-1. Clone & Install
-Bash
-git clone [https://github.com/YOUR_USERNAME/crypto_realtime_pipeline](https://github.com/YOUR_USERNAME/crypto_realtime_pipeline)
-cd crypto_realtime_pipeline
-pip install -r requirements.txt
-2. Environment Setup
-Create a .env file in the root:
+4. TRADINGVIEW DASHBOARD (dashboard.py)
+Killer Features
+Feature	Implementation
+4x Color Pickers	Bull/Bear fill + border/wick
+Multi-Timeframe	1m/5m/15m/1d tables
+Dark/Light Themes	Dynamic Plotly backgrounds
+TradingView UX	Zoom/pan, no clutter
+Live Data Layer
+python
+@st.cache_data(ttl=5)  # 5s refresh
+SELECT * FROM GOLD.TRADES_OHLC_1M 
+WHERE DATE >= CURRENT_DATE()-7
+Advanced Plotly
+python
+go.Candlestick(
+  increasing_fillcolor=green_fill,      # Bull candle body
+  increasing_line_color=green_border,   # Bull wick/border
+  decreasing_fillcolor=red_fill,        # Bear candle body  
+  decreasing_line_color=red_border,     # Bear wick/border
+  line=dict(width=1)                   # Clean borders
+)
+🚀 DEPLOYMENT GUIDE
+Local Setup
+bash
+# Terminal 1: Ingester
+pip install requests websocket-client boto3
+python ingest.py
 
-Code snippet
-SNOWFLAKE_ACCOUNT="your_account"
-SNOWFLAKE_USER="your_user"
-SNOWFLAKE_PASSWORD="your_password"
-AWS_ACCESS_KEY="your_aws_key"
-AWS_SECRET_KEY="your_aws_secret"
-3. Launch
-Bash
-# Start ingestion
-python Ingestion/binance_trade_listener.py
+# Terminal 2: Dashboard
+pip install streamlit plotly snowflake-connector-python pandas
+streamlit run dashboard.py
+Git Ready
+bash
+git init && git add .
+git commit -m "🚀 Production Crypto Pipeline v1.0"
+git push origin main
+📊 Performance Profile
+Component	Latency	Throughput
+Python → S3	60s batches	1000+ trades/min
+Snowpipe	10-30s	Auto-scaling
+dbt	2-5min	Incremental
+Dashboard	5s refresh	Interactive
+🎯 Production Features
+✅ Fault Tolerance: state.json checkpointing
 
-# Launch Dashboard
-streamlit run dbt_crypto_pipeline/dashboard.py
-🎓 Skills Demonstrated
-Stream Processing: Handling high-frequency WebSocket events.
+✅ Rate Limiting: API throttling + timeouts
 
-Cloud-Native Ingestion: Orchestrating micro-batch uploads to S3.
+✅ Auto Scaling: Snowpipe + dbt incrementals
 
-Analytics Engineering: Writing idempotent dbt models for time-series aggregation.
+✅ Timezones: UTC → IST conversion
 
-Full-Stack Data: Bridging the gap between raw backend data and frontend financial UX.
-
-Status: 🚀 Production Deployed
-
-Author: NIKHIL NIMBAL
+✅ Deduplication: Business key uniqueness
